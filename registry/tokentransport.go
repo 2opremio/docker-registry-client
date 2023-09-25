@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type TokenTransport struct {
-	Transport http.RoundTripper
-	Username  string
-	Password  string
+	Transport     http.RoundTripper
+	ClientTimeout time.Duration
+	Username      string
+	Password      string
 }
 
 func (t *TokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -48,6 +50,7 @@ func (t *TokenTransport) auth(authService *authService) (string, *http.Response,
 
 	client := http.Client{
 		Transport: t.Transport,
+		Timeout:   t.ClientTimeout,
 	}
 
 	response, err := client.Do(authReq)
@@ -55,7 +58,7 @@ func (t *TokenTransport) auth(authService *authService) (string, *http.Response,
 		return "", nil, err
 	}
 	defer response.Body.Close()
-	
+
 	if response.StatusCode != http.StatusOK {
 		return "", response, err
 	}
