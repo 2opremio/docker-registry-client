@@ -13,6 +13,7 @@ type TokenTransport struct {
 	ClientTimeout time.Duration
 	Username      string
 	Password      string
+	client        *http.Client
 }
 
 func (t *TokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -33,47 +34,49 @@ type authToken struct {
 }
 
 func (t *TokenTransport) authAndRetry(authService *authService, req *http.Request) (*http.Response, error) {
-	token, authResp, err := t.auth(authService)
+	token, err := t.auth(authService)
 	if err != nil {
-		return authResp, err
+		return nil, err
 	}
 
 	retryResp, err := t.retry(req, token)
 	return retryResp, err
 }
 
-func (t *TokenTransport) auth(authService *authService) (string, *http.Response, error) {
+func (t *TokenTransport) auth(authService *authService) (string, error) {
 	authReq, err := authService.Request(t.Username, t.Password)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 
-	client := http.Client{
-		Transport: t.Transport,
-		Timeout:   t.ClientTimeout,
+	if t.client == nil {
+		t.client = &http.Client{
+			Transport: t.Transport,
+			Timeout:   t.ClientTimeout,
+		}
 	}
 
-	response, err := client.Do(authReq)
+	response, err := t.client.Do(authReq)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return "", response, err
+		return "", err
 	}
 
 	var authToken authToken
 	decoder := json.NewDecoder(response.Body)
 	err = decoder.Decode(&authToken)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 
 	if authToken.Token == "" {
-		return authToken.AccessToken, nil, nil
+		return authToken.AccessToken, nil
 	} else {
-		return authToken.Token, nil, nil
+		return authToken.Token, nil
 	}
 }
 
